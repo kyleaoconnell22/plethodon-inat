@@ -119,14 +119,16 @@ def fetch_all_plethodon(
     while True:
         page_num += 1
         try:
-            response = get_observations(
+            params = dict(
                 taxon_id=INAT_TAXON_ID,
                 quality_grade=INAT_QUALITY_GRADE,
                 per_page=INAT_PER_PAGE,
                 order="asc",
                 order_by="id",
-                id_above=id_above,
             )
+            if id_above:
+                params["id_above"] = id_above
+            response = get_observations(**params)
         except Exception as e:
             logger.error(f"API error on page {page_num} (id_above={id_above}): {e}")
             # Save progress checkpoint
@@ -173,6 +175,8 @@ def _save_checkpoint(records: list[dict], last_id: int) -> None:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     checkpoint_path = RAW_DIR / "checkpoint.parquet"
     df = pd.DataFrame(records)
+    if "observed_on" in df.columns:
+        df["observed_on"] = df["observed_on"].astype(str)
     df.to_parquet(checkpoint_path, index=False)
     # Save last ID for resume
     (RAW_DIR / "checkpoint_last_id.txt").write_text(str(last_id))
@@ -185,6 +189,10 @@ def save_raw_data(df: pd.DataFrame) -> tuple[Path, Path]:
 
     parquet_path = RAW_DIR / "plethodon_raw.parquet"
     csv_path = RAW_DIR / "plethodon_raw.csv"
+
+    # Ensure observed_on is string for parquet compatibility (mixed types from API)
+    if "observed_on" in df.columns:
+        df["observed_on"] = df["observed_on"].astype(str)
 
     df.to_parquet(parquet_path, index=False)
     df.to_csv(csv_path, index=False)

@@ -12,7 +12,7 @@ PHOTOS_DIR = DATA_DIR / "photos"
 FIGURES_DIR = PROJECT_ROOT / "figures"
 
 # ── iNaturalist API ────────────────────────────────────────────────────
-INAT_TAXON_ID = 17684          # genus Plethodon on iNaturalist
+INAT_TAXON_ID = 27135          # genus Plethodon on iNaturalist
 INAT_PER_PAGE = 200            # max results per API page
 INAT_RATE_LIMIT_DELAY = 1.0   # seconds between API calls
 INAT_QUALITY_GRADE = "research"
