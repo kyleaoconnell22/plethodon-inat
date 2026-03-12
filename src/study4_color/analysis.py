@@ -232,11 +232,17 @@ def _ols_summary(y, X, label):
 
 
 def geographic_analysis(merged_df: pd.DataFrame) -> dict:
-    """Run geographic brightness analyses and regressions."""
+    """
+    Run geographic brightness analyses structured as:
+      Primary:     within-species for P. cinereus (brightness ~ lat + lon)
+      Secondary:   within-species for other well-sampled species
+      Exploratory: cross-species comparison (are higher-lat species darker/lighter?)
+    """
     h3_col = f"h3_res{H3_RES_BROAD}"
     results = {}
+    MIN_N_FOR_REGRESSION = 50
 
-    # Mean brightness per H3 cell
+    # ── Cell-level brightness summary ────────────────────────────────
     cell_brightness = (
         merged_df.groupby(h3_col)
         .agg(
@@ -251,26 +257,72 @@ def geographic_analysis(merged_df: pd.DataFrame) -> dict:
     results["cell_brightness"] = cell_brightness
     logger.info(f"Cell-level brightness: {len(cell_brightness)} cells")
 
-    # All-species OLS: brightness ~ latitude + longitude (elevation proxy)
-    results["ols_all"] = _ols_summary(
-        merged_df["mean_brightness"],
-        merged_df[["lat", "lon"]],
-        "all_species ~ lat + lon",
-    )
-
-    # P. cinereus only
+    # ── PRIMARY: P. cinereus within-species ──────────────────────────
+    logger.info("=" * 50)
+    logger.info("PRIMARY ANALYSIS: P. cinereus within-species")
     pc = merged_df[merged_df["species"] == "Plethodon cinereus"]
-    if len(pc) >= 30:
-        results["ols_cinereus"] = _ols_summary(
+    if len(pc) >= MIN_N_FOR_REGRESSION:
+        results["primary_ols_cinereus"] = _ols_summary(
             pc["mean_brightness"],
             pc[["lat", "lon"]],
-            "P_cinereus ~ lat + lon",
+            "PRIMARY: P_cinereus ~ lat + lon",
         )
+        # Also test latitude alone (cleaner test of ecogeographic hypotheses)
+        results["primary_ols_cinereus_lat_only"] = _ols_summary(
+            pc["mean_brightness"],
+            pc[["lat"]],
+            "PRIMARY: P_cinereus ~ lat",
+        )
+        # Cell-level for P. cinereus (reduces pseudoreplication)
+        pc_cells = (
+            pc.groupby(h3_col)
+            .agg(
+                mean_brightness=("mean_brightness", "mean"),
+                n=("obs_id", "count"),
+                cell_lat=("lat", "mean"),
+                cell_lon=("lon", "mean"),
+            )
+            .reset_index()
+        )
+        pc_cells_filtered = pc_cells[pc_cells["n"] >= 3]
+        if len(pc_cells_filtered) >= 20:
+            results["primary_ols_cinereus_cell_level"] = _ols_summary(
+                pc_cells_filtered["mean_brightness"],
+                pc_cells_filtered[["cell_lat", "cell_lon"]],
+                "PRIMARY: P_cinereus cell-level ~ lat + lon",
+            )
+        logger.info(f"  P. cinereus: {len(pc)} obs, {len(pc_cells)} cells")
     else:
-        logger.warning(f"Too few P. cinereus obs ({len(pc)}) for regression")
-        results["ols_cinereus"] = None
+        logger.warning(f"Too few P. cinereus obs ({len(pc)}) for primary analysis")
+        results["primary_ols_cinereus"] = None
 
-    # Cross-species comparison (Kruskal-Wallis)
+    # ── SECONDARY: Other well-sampled species ────────────────────────
+    logger.info("=" * 50)
+    logger.info("SECONDARY ANALYSIS: Within-species for other species")
+    secondary_species = (
+        merged_df[merged_df["species"] != "Plethodon cinereus"]
+        .groupby("species")
+        .size()
+        .loc[lambda x: x >= MIN_N_FOR_REGRESSION]
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+    results["secondary_within_species"] = {}
+    for sp in secondary_species:
+        sp_df = merged_df[merged_df["species"] == sp]
+        result = _ols_summary(
+            sp_df["mean_brightness"],
+            sp_df[["lat", "lon"]],
+            f"SECONDARY: {sp} ~ lat + lon",
+        )
+        results["secondary_within_species"][sp] = result
+    logger.info(f"  {len(secondary_species)} species with n >= {MIN_N_FOR_REGRESSION}")
+
+    # ── EXPLORATORY: Cross-species comparison ────────────────────────
+    logger.info("=" * 50)
+    logger.info("EXPLORATORY: Cross-species brightness comparison")
+
+    # Kruskal-Wallis: do species differ in brightness?
     species_groups = [
         grp["mean_brightness"].values
         for _, grp in merged_df.groupby("species")
@@ -278,12 +330,12 @@ def geographic_analysis(merged_df: pd.DataFrame) -> dict:
     ]
     if len(species_groups) >= 2:
         kw_stat, kw_p = stats.kruskal(*species_groups)
-        results["kruskal_wallis"] = {"statistic": kw_stat, "pvalue": kw_p}
-        logger.info(f"Kruskal-Wallis across species: H={kw_stat:.1f}, p={kw_p:.2e}")
+        results["exploratory_kruskal_wallis"] = {"statistic": kw_stat, "pvalue": kw_p}
+        logger.info(f"  Kruskal-Wallis across species: H={kw_stat:.1f}, p={kw_p:.2e}")
     else:
-        results["kruskal_wallis"] = None
+        results["exploratory_kruskal_wallis"] = None
 
-    # Species summary table
+    # Species-level: does mean brightness correlate with mean latitude?
     sp_summary = (
         merged_df.groupby("species")
         .agg(
@@ -291,11 +343,21 @@ def geographic_analysis(merged_df: pd.DataFrame) -> dict:
             mean_brightness=("mean_brightness", "mean"),
             std_brightness=("mean_brightness", "std"),
             mean_lat=("lat", "mean"),
+            lat_range=("lat", lambda x: x.max() - x.min()),
         )
         .sort_values("n", ascending=False)
         .reset_index()
     )
     results["species_summary"] = sp_summary
+
+    # Correlation of species mean brightness vs species mean latitude
+    sp_with_enough = sp_summary[sp_summary["n"] >= 10]
+    if len(sp_with_enough) >= 5:
+        r, p = stats.pearsonr(sp_with_enough["mean_lat"], sp_with_enough["mean_brightness"])
+        results["exploratory_species_lat_brightness_corr"] = {
+            "r": round(r, 4), "p": round(p, 4), "n_species": len(sp_with_enough),
+        }
+        logger.info(f"  Species mean brightness vs mean latitude: r={r:.3f}, p={p:.3f}, n={len(sp_with_enough)} species")
 
     return results
 
@@ -358,7 +420,11 @@ def plot_brightness_regressions(
     merged_df: pd.DataFrame,
     output_dir: Path | str | None = None,
 ) -> Path:
-    """Multi-panel regression: brightness vs lat and lon."""
+    """
+    Multi-panel regression figure structured by analysis hierarchy:
+      Top row:    PRIMARY — P. cinereus brightness vs latitude and longitude
+      Bottom row: SECONDARY — within-species slopes for other well-sampled species
+    """
     if output_dir is None:
         output_dir = STUDY_FIGURES_DIR
     output_dir = Path(output_dir)
@@ -366,43 +432,89 @@ def plot_brightness_regressions(
 
     pc = merged_df[merged_df["species"] == "Plethodon cinereus"]
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    fig, axes = plt.subplots(2, 2, figsize=(13, 11))
 
-    datasets = [
-        (merged_df, "All species"),
-        (pc, "P. cinereus only"),
-    ]
-
-    for col_idx, (data, label) in enumerate(datasets):
-        if data.empty:
-            continue
+    # ── Top row: PRIMARY — P. cinereus ──────────────────────────────
+    if not pc.empty:
         # Brightness vs latitude
-        ax = axes[0, col_idx]
+        ax = axes[0, 0]
         sns.regplot(
-            x="lat", y="mean_brightness", data=data,
-            scatter_kws={"alpha": 0.15, "s": 8},
-            line_kws={"color": "crimson"},
+            x="lat", y="mean_brightness", data=pc,
+            scatter_kws={"alpha": 0.12, "s": 6, "color": "#2c7bb6"},
+            line_kws={"color": "crimson", "linewidth": 2},
             ci=95, ax=ax,
         )
-        r, p = stats.pearsonr(data["lat"].dropna(), data["mean_brightness"].dropna())
-        ax.set_title(f"{label}\nr={r:.3f}, p={p:.2e}")
+        r, p = stats.pearsonr(pc["lat"].dropna(), pc["mean_brightness"].dropna())
+        ax.set_title(f"PRIMARY: P. cinereus (n={len(pc):,})\nr={r:.3f}, p={p:.2e}")
         ax.set_xlabel("Latitude")
-        ax.set_ylabel("Mean brightness (V)")
+        ax.set_ylabel("Mean dorsal brightness (L*)")
 
-        # Brightness vs longitude (elevation proxy for Appalachians)
-        ax = axes[1, col_idx]
+        # Brightness vs longitude
+        ax = axes[0, 1]
         sns.regplot(
-            x="lon", y="mean_brightness", data=data,
-            scatter_kws={"alpha": 0.15, "s": 8},
-            line_kws={"color": "navy"},
+            x="lon", y="mean_brightness", data=pc,
+            scatter_kws={"alpha": 0.12, "s": 6, "color": "#2c7bb6"},
+            line_kws={"color": "navy", "linewidth": 2},
             ci=95, ax=ax,
         )
-        r, p = stats.pearsonr(data["lon"].dropna(), data["mean_brightness"].dropna())
-        ax.set_title(f"{label}\nr={r:.3f}, p={p:.2e}")
+        r, p = stats.pearsonr(pc["lon"].dropna(), pc["mean_brightness"].dropna())
+        ax.set_title(f"PRIMARY: P. cinereus (n={len(pc):,})\nr={r:.3f}, p={p:.2e}")
         ax.set_xlabel("Longitude (elevation proxy)")
-        ax.set_ylabel("Mean brightness (V)")
+        ax.set_ylabel("Mean dorsal brightness (L*)")
 
-    fig.suptitle("Dorsal Brightness vs. Geography", fontsize=14, y=1.02)
+    # ── Bottom left: SECONDARY — within-species latitude slopes ─────
+    ax = axes[1, 0]
+    MIN_N = 50
+    secondary = (
+        merged_df.groupby("species")
+        .filter(lambda g: len(g) >= MIN_N and g.name != "Plethodon cinereus")
+    )
+    species_slopes = []
+    for sp, grp in secondary.groupby("species"):
+        slope, _, r_value, p_value, _ = stats.linregress(grp["lat"], grp["mean_brightness"])
+        species_slopes.append({
+            "species": sp.replace("Plethodon ", "P. "),
+            "slope": slope, "r": r_value, "p": p_value, "n": len(grp),
+        })
+    if species_slopes:
+        slopes_df = pd.DataFrame(species_slopes).sort_values("slope")
+        colors = ["#d7191c" if s < 0 else "#2c7bb6" for s in slopes_df["slope"]]
+        ax.barh(slopes_df["species"], slopes_df["slope"], color=colors, edgecolor="0.3", linewidth=0.5)
+        ax.axvline(0, color="black", linewidth=0.8, linestyle="--")
+        ax.set_xlabel("Slope (brightness ~ latitude)")
+        ax.set_title(f"SECONDARY: Within-species latitude slopes\n(species with n ≥ {MIN_N})")
+        # Add significance markers
+        for i, row in enumerate(slopes_df.itertuples()):
+            if row.p < 0.05:
+                ax.text(row.slope, i, " *", va="center", fontsize=10, fontweight="bold")
+
+    # ── Bottom right: EXPLORATORY — species mean brightness vs lat ──
+    ax = axes[1, 1]
+    sp_means = (
+        merged_df.groupby("species")
+        .agg(mean_brightness=("mean_brightness", "mean"), mean_lat=("lat", "mean"), n=("obs_id", "count"))
+        .reset_index()
+    )
+    sp_means = sp_means[sp_means["n"] >= 10]
+    sp_means["short"] = sp_means["species"].str.replace("Plethodon ", "P. ")
+    ax.scatter(sp_means["mean_lat"], sp_means["mean_brightness"],
+               s=sp_means["n"].clip(upper=500) / 5, alpha=0.7, color="#fdae61", edgecolors="0.3")
+    for _, row in sp_means.iterrows():
+        ax.annotate(row["short"], (row["mean_lat"], row["mean_brightness"]),
+                     fontsize=6, alpha=0.7, ha="center", va="bottom")
+    if len(sp_means) >= 5:
+        r, p = stats.pearsonr(sp_means["mean_lat"], sp_means["mean_brightness"])
+        # Add regression line
+        z = np.polyfit(sp_means["mean_lat"], sp_means["mean_brightness"], 1)
+        x_line = np.linspace(sp_means["mean_lat"].min(), sp_means["mean_lat"].max(), 50)
+        ax.plot(x_line, np.polyval(z, x_line), "k--", linewidth=1.5, alpha=0.5)
+        ax.set_title(f"EXPLORATORY: Species means\nr={r:.3f}, p={p:.3f}, n={len(sp_means)} species")
+    else:
+        ax.set_title("EXPLORATORY: Species means")
+    ax.set_xlabel("Mean latitude of species")
+    ax.set_ylabel("Mean dorsal brightness (L*)")
+
+    fig.suptitle("Dorsal Brightness vs. Geography — Analysis Hierarchy", fontsize=14, y=1.02)
     fig.tight_layout()
 
     out_path = output_dir / "brightness_regressions.png"

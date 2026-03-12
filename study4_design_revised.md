@@ -36,7 +36,13 @@ All experiments were logged with the full parameter configuration and summary st
 
 ### Downstream analysis
 
-After parameter optimization, the final extraction configuration was applied to all available photos that passed download and quality-control checks. Extracted color measurements were merged back to the cleaned observation table, yielding a dataset that linked dorsal brightness to species identity, coordinates, year, and H3 cell. We then summarized brightness at the cell level, fit ordinary least squares models to test for broad geographic associations, and conducted species-level comparisons where sample sizes were adequate. For *Plethodon cinereus*, whose color polymorphism provides an internal biological benchmark, the resulting measurements also allowed direct evaluation of whether the pipeline recovered known differences in dorsal appearance among phenotypic classes.
+After parameter optimization, the final extraction configuration was applied to all available photos that passed download and quality-control checks. Extracted color measurements were merged back to the cleaned observation table, yielding a dataset that linked dorsal brightness to species identity, coordinates, year, and H3 cell. Analyses were structured into three tiers:
+
+**Primary analysis (within-species, *P. cinereus*)**: Because interspecific brightness differences confound geographic analysis when species are pooled, the primary test of ecogeographic hypotheses used only *Plethodon cinereus* observations (~69% of the dataset). Holding species identity constant, we regressed individual-level dorsal brightness against latitude and longitude, and repeated the analysis at the H3 cell level to reduce pseudoreplication. A positive latitude coefficient (brighter northward) would support Gloger's rule; a negative coefficient (darker northward) would support the thermal melanism hypothesis.
+
+**Secondary analysis (within-species, other species)**: We repeated the latitude–brightness regression for each additional species with at least 50 observations (*P. glutinosus*, *P. vehiculum*, *P. cylindraceus*, *P. albagula*, *P. dorsalis*, *P. serratus*, and others). Concordance of slope direction across species would indicate a genus-wide ecogeographic pattern rather than a species-specific one.
+
+**Exploratory analysis (cross-species comparison)**: We tested whether species mean brightness correlated with species mean latitude across all species with at least 10 observations, and used a Kruskal–Wallis test to confirm that brightness distributions differed among species. This analysis is inherently confounded by phylogenetic non-independence and was treated as hypothesis-generating.
 
 Taken together, this study design paired a substantive ecological question with a deliberately constrained agentic workflow. Biologically, the study tested whether dorsal coloration in *Plethodon* exhibits geographic structure consistent with classic ecogeographic expectations. Methodologically, it evaluated whether an LLM-guided loop can serve as a practical tool for parameter search in ecological image analysis by combining explicit objectives, bounded intervention, cloud-based execution, and experiment-level logging.
 
@@ -48,8 +54,8 @@ Delhey, K. 2019. A review of Gloger's rule, an ecogeographical rule of colour: d
 
 Di Cecco, G. J., Barve, V., Belitz, M. W., Stucky, B. J., Guralnick, R. P., and Hurlbert, A. H. 2021. Observing the observers: how participants contribute data to iNaturalist and implications for biodiversity science. *BioScience* 71:1179-1188. https://doi.org/10.1093/biosci/biab093
 
-iNaturalist contributors, iNaturalist. 2026. *iNaturalist Research-grade Observations*. Occurrence dataset. https://doi.org/10.15468/ab3s5x
+iNaturalist contributors, iNaturalist. 2026. *iNaturalist Research-grade Observations*. Occurrence dataset. Accessed 2026-03-12. https://doi.org/10.15468/ab3s5x
 
-Karpathy, A. 2026. *autoresearch*. GitHub repository. https://github.com/karpathy/autoresearch
+Karpathy, A. 2026. *autoresearch*. GitHub repository. Accessed 2026-03-12. https://github.com/karpathy/autoresearch
 
 Schmidgall, S., Su, Y., Wang, Z., Sun, X., Wu, J., Yu, X., Liu, J., Moor, M., Liu, Z., and Barsoum, E. 2025. Agent Laboratory: Using LLM agents as research assistants. *Findings of the Association for Computational Linguistics: EMNLP 2025*, 5977-6043. https://doi.org/10.18653/v1/2025.findings-emnlp.320
