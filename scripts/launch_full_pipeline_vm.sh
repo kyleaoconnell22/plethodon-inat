@@ -25,9 +25,7 @@ echo "=== Creating VM ==="
 gcloud compute instances create "$VM_NAME" \
     --project="$PROJECT" \
     --zone="$ZONE" \
-    --machine-type=n2-highmem-16 \
-    --provisioning-model=SPOT \
-    --instance-termination-action=STOP \
+    --machine-type=n2-highmem-32 \
     --image-family=debian-12 \
     --image-project=debian-cloud \
     --boot-disk-size=200GB \
@@ -38,7 +36,7 @@ gcloud compute instances create "$VM_NAME" \
     --scopes=cloud-platform \
     --service-account="$SA" \
     --account=kyoconnell@ocg.deloitte.com \
-    --labels=project=plethodon-inat,study=study4-color,owner=kyoconnell,experiment=autoresearch-full \
+    --labels=project=plethodon-inat,study=study4-color,owner=kyoconnell,experiment=autoresearch-full,provisioning=ondemand \
     --metadata-from-file=startup-script="$SCRIPT_DIR/vm_startup.sh"
 
 echo ""

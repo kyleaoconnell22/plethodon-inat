@@ -45,7 +45,7 @@ import pandas as pd
 from src.study4_color.analysis import download_photos
 manifest = pd.read_csv("data/photos/photo_manifest.csv")
 print(f"Downloading {len(manifest)} photos...")
-download_photos(manifest, output_dir="data/photos", max_workers=8, rate_limit=0.5)
+download_photos(manifest, output_dir="data/photos", max_workers=16, rate_limit=0.5)
 PYEOF
 
 echo "=== $(date) Running autoresearch loop (200 iterations) ==="
