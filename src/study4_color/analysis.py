@@ -33,6 +33,8 @@ from src.config import (
     MAX_BRIGHTNESS,
     MIN_IMAGE_ENTROPY,
     H3_RES_BROAD,
+    GLUTINOSUS_COMPLEX,
+    GLUTINOSUS_COMPLEX_MIN_ID_AGREEMENTS,
 )
 
 logger = logging.getLogger(__name__)
@@ -297,10 +299,38 @@ def geographic_analysis(merged_df: pd.DataFrame) -> dict:
         results["primary_ols_cinereus"] = None
 
     # ── SECONDARY: Other well-sampled species ────────────────────────
+    # For glutinosus complex members, apply stricter ID agreement filter
+    # (cryptic species frequently misidentified on iNat; Highton et al. 1989).
+    # NOTE: If glutinosus complex results look anomalous (e.g., slope direction
+    # inconsistent with geography, or driven by species-composition shifts),
+    # drop them from final reporting. If results are consistent with other
+    # species, retain with caveat in discussion.
     logger.info("=" * 50)
     logger.info("SECONDARY ANALYSIS: Within-species for other species")
+
+    # Build filtered dataset for glutinosus complex (require 3+ ID agreements)
+    is_complex = merged_df["species"].isin(GLUTINOSUS_COMPLEX)
+    complex_df = merged_df[is_complex]
+    non_complex_df = merged_df[~is_complex & (merged_df["species"] != "Plethodon cinereus")]
+
+    if "num_id_agreements" in complex_df.columns:
+        complex_filtered = complex_df[
+            complex_df["num_id_agreements"] >= GLUTINOSUS_COMPLEX_MIN_ID_AGREEMENTS
+        ]
+        n_dropped = len(complex_df) - len(complex_filtered)
+        logger.info(
+            f"  Glutinosus complex: {len(complex_df)} obs → {len(complex_filtered)} "
+            f"after requiring {GLUTINOSUS_COMPLEX_MIN_ID_AGREEMENTS}+ ID agreements "
+            f"({n_dropped} dropped)"
+        )
+    else:
+        complex_filtered = complex_df
+        logger.warning("  num_id_agreements column not found — cannot filter glutinosus complex")
+
+    secondary_df = pd.concat([non_complex_df, complex_filtered], ignore_index=True)
+
     secondary_species = (
-        merged_df[merged_df["species"] != "Plethodon cinereus"]
+        secondary_df
         .groupby("species")
         .size()
         .loc[lambda x: x >= MIN_N_FOR_REGRESSION]
@@ -309,14 +339,23 @@ def geographic_analysis(merged_df: pd.DataFrame) -> dict:
     )
     results["secondary_within_species"] = {}
     for sp in secondary_species:
-        sp_df = merged_df[merged_df["species"] == sp]
+        sp_df = secondary_df[secondary_df["species"] == sp]
         result = _ols_summary(
             sp_df["mean_brightness"],
             sp_df[["lat", "lon"]],
             f"SECONDARY: {sp} ~ lat + lon",
         )
+        result["in_glutinosus_complex"] = sp in GLUTINOSUS_COMPLEX
+        if sp in GLUTINOSUS_COMPLEX:
+            result["id_filter_applied"] = f">={GLUTINOSUS_COMPLEX_MIN_ID_AGREEMENTS} agreements"
         results["secondary_within_species"][sp] = result
     logger.info(f"  {len(secondary_species)} species with n >= {MIN_N_FOR_REGRESSION}")
+
+    # Flag complex species in log
+    complex_in_secondary = [sp for sp in secondary_species if sp in GLUTINOSUS_COMPLEX]
+    if complex_in_secondary:
+        logger.info(f"  Glutinosus complex species in secondary: {complex_in_secondary}")
+        logger.info("  ⚠ Results for these species should be interpreted with caution")
 
     # ── EXPLORATORY: Cross-species comparison ────────────────────────
     logger.info("=" * 50)

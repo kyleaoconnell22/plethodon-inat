@@ -39,6 +39,29 @@ FOCUS_PAIRS = [
 ]
 
 # ── Study 4 ────────────────────────────────────────────────────────────
+# P. glutinosus complex: cryptic species split by Highton et al. (1989).
+# Community IDs on iNat frequently default to "glutinosus" for any large
+# dark Plethodon in the Southeast. Require higher ID agreement for these.
+GLUTINOSUS_COMPLEX = [
+    "Plethodon glutinosus",
+    "Plethodon cylindraceus",
+    "Plethodon chlorobryonis",
+    "Plethodon mississippi",
+    "Plethodon kiamichi",
+    "Plethodon kisatchie",
+    "Plethodon sequoyah",
+    "Plethodon savannah",
+    "Plethodon ocmulgee",
+    "Plethodon chattahoochee",
+    "Plethodon variolatus",
+    "Plethodon aureolus",
+    "Plethodon kentucki",
+    "Plethodon petraeus",
+    "Plethodon teyahalee",
+    "Plethodon shermani",
+]
+GLUTINOSUS_COMPLEX_MIN_ID_AGREEMENTS = 3  # require 3+ agreeing IDs
+
 PHOTO_DOWNLOAD_WORKERS = 4
 PHOTO_RATE_LIMIT_DELAY = 1.0   # seconds between downloads
 CENTRAL_CROP_FRACTION = 0.4    # fraction of image to keep (centered)
