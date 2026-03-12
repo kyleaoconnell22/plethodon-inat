@@ -1,0 +1,40 @@
+# Data files (too large for git)
+data/raw/
+data/cleaned/
+data/photos/
+*.parquet
+*.csv
+
+# Keep directory structure
+!data/raw/.gitkeep
+!data/cleaned/.gitkeep
+!data/photos/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Figures (generated, not tracked)
+figures/
+
+# Conda
+*.conda
