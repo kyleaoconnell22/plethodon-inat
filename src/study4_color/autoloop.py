@@ -25,6 +25,20 @@ from skimage.measure import shannon_entropy
 
 logger = logging.getLogger(__name__)
 
+
+def _json_convert(obj):
+    """Convert numpy types for JSON serialization."""
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 # ── Default extraction config ───────────────────────────────────────
 
 DEFAULT_CONFIG = {
@@ -171,7 +185,9 @@ def extract_with_config(image_path, config):
 
     # Optional brightness normalization
     if config["normalize_brightness"]:
-        arr = (equalize_hist(arr) * 255).astype(np.uint8)
+        # Apply histogram equalization per channel
+        for c in range(3):
+            arr[:, :, c] = (equalize_hist(arr[:, :, c]) * 255).astype(np.uint8)
 
     # Crop
     x0, y0, x1, y1 = _get_crop_region(w, h, config)
@@ -340,13 +356,13 @@ def log_experiment(exp_dir, iteration, result, change_desc, accepted):
     # Append to JSONL log
     log_path = exp_dir / "experiments.jsonl"
     with open(log_path, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+        f.write(json.dumps(entry, default=_json_convert) + "\n")
 
     # Update best config if accepted
     if accepted:
         best_path = exp_dir / "best_config.json"
         with open(best_path, "w") as f:
-            json.dump(result["config"], f, indent=2)
+            json.dump(result["config"], f, indent=2, default=_json_convert)
 
     return entry
 
@@ -455,7 +471,7 @@ def run_loop(
     logger.info(f"AUTORESEARCH COMPLETE: {n_iterations} experiments")
     logger.info(f"  Accepted: {accepted_count}/{n_iterations} ({accepted_count/n_iterations*100:.1f}%)")
     logger.info(f"  Best score: {best_score:.6f}")
-    logger.info(f"  Best config: {json.dumps(config, indent=2)}")
+    logger.info(f"  Best config: {json.dumps(config, indent=2, default=_json_convert)}")
     logger.info(f"  Logs: {exp_dir / 'experiments.jsonl'}")
     logger.info("=" * 60)
 
