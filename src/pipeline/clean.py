@@ -122,7 +122,7 @@ def flag_out_of_range(df: pd.DataFrame) -> pd.DataFrame:
 
 def standardize_types(df: pd.DataFrame) -> pd.DataFrame:
     """Ensure consistent dtypes for downstream analysis."""
-    df["observed_on"] = pd.to_datetime(df["observed_on"], errors="coerce")
+    df["observed_on"] = pd.to_datetime(df["observed_on"], format="mixed", utc=True, errors="coerce")
     df["year"] = df["observed_on"].dt.year
     df["month"] = df["observed_on"].dt.month
 
